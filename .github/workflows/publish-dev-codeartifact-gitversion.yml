@@ -40,10 +40,11 @@ jobs:
 
       - name: Set version in Cargo.toml
         run: |
-          VERSION='${{ steps.ver.outputs.version }}'
-          sed -i -E "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+          VERSION="${{ steps.ver.outputs.version }}"
+          sed -i -E "s/^version\s*=\s*\".*\"/version = \"${VERSION}\"/" Cargo.toml
           echo "Publishing version: ${VERSION}"
-          grep '^version =' Cargo.toml`n
+          grep '^version\s*=\s*' Cargo.toml
+
       - name: Fetch CodeArtifact token
         run: |
           TOKEN=$(aws codeartifact get-authorization-token \
