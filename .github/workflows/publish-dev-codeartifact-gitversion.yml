@@ -32,15 +32,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Set version in Cargo.toml
-        id: ver
-        run: |
-          VERSION="${{ steps.gitversion.outputs.majorMinorPatch }}-dev.${{ github.run_number }}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          sed -i -E "s/^version\s*=\s*\".*\"/version = \"${VERSION}\"/" Cargo.toml
-          echo "Publishing version: ${VERSION}"
-          grep '^version\s*=\s*' Cargo.toml
-
       - name: Fetch CodeArtifact token
         run: |
           TOKEN=$(aws codeartifact get-authorization-token \
@@ -51,6 +42,15 @@ jobs:
             --output text)
           echo "::add-mask::$TOKEN"
           echo "CARGO_REGISTRIES_CORP_ARTIFACTS_GREENTIC_TEST_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Set version in Cargo.toml
+        id: ver
+        run: |
+          VERSION="${{ steps.gitversion.outputs.majorMinorPatch }}-dev.${{ github.run_number }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          sed -i -E "s/^version\s*=\s*\".*\"/version = \"${VERSION}\"/" Cargo.toml
+          echo "Publishing version: ${VERSION}"
+          grep '^version\s*=\s*' Cargo.toml
 
       - name: Publish crate (gate)
         run: cargo publish --registry corp-artifacts-greentic-test --allow-dirty
