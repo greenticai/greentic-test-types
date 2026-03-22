@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   publish-dev:
@@ -32,9 +32,15 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Set dev version from GitVersion + run number
+      - name: Compute version
+        id: ver
         run: |
           VERSION="${{ steps.gitversion.outputs.majorMinorPatch }}-dev.${{ github.run_number }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set version in Cargo.toml
+        run: |
+          VERSION='${{ steps.ver.outputs.version }}'
           sed -i -E "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
           echo "Publishing version: ${VERSION}"
           grep '^version =' Cargo.toml
@@ -59,5 +65,17 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "CARGO_REGISTRIES_CORP_ARTIFACTS_GREENTIC_TEST_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Publish crate (dev)
+      - name: Publish crate (gate)
         run: cargo publish --registry corp-artifacts-greentic-test --allow-dirty
+
+      - name: Create git tag only after successful publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.ver.outputs.version }}"
+          if gh api "repos/${{ github.repository }}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists"
+          else
+            gh api "repos/${{ github.repository }}/git/refs" -X POST -f ref="refs/tags/${TAG}" -f sha="${GITHUB_SHA}"
+            echo "Created tag ${TAG}"
+          fi
