@@ -1,0 +1,51 @@
+name: Publish test-types dev to CodeArtifact
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+
+      - name: Build dev version from Cargo.toml and run number
+        run: |
+          BASE=$(grep '^version =' Cargo.toml | head -1 | sed -E 's/version = "(.*)"/\1/')
+          DEV_VERSION="${BASE}-dev.${GITHUB_RUN_NUMBER}"
+          sed -i -E "s/^version = \".*\"/version = \"${DEV_VERSION}\"/" Cargo.toml
+          echo "Publishing version: ${DEV_VERSION}"
+
+      - name: Configure Cargo registry
+        run: |
+          mkdir -p .cargo
+          cat > .cargo/config.toml << 'EOF'
+          [registries.corp-artifacts-greentic-test]
+          index = "sparse+https://corp-artifacts-599558443099.d.codeartifact.eu-north-1.amazonaws.com/cargo/greentic/"
+          credential-provider = "cargo:token"
+          EOF
+
+      - name: Fetch CodeArtifact token
+        run: |
+          TOKEN=$(aws codeartifact get-authorization-token \
+            --domain corp-artifacts \
+            --domain-owner 599558443099 \
+            --region eu-north-1 \
+            --query authorizationToken \
+            --output text)
+          echo "CARGO_REGISTRIES_CORP_ARTIFACTS_GREENTIC_TEST_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Publish crate (dev)
+        run: cargo publish --registry corp-artifacts-greentic-test --allow-dirty
