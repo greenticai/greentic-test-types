@@ -4,5 +4,5 @@ pub struct Event {
 }
 
 pub fn schema_version() -> &'static str {
-    "v1"
+    "v2"
 }
